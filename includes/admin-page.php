@@ -90,34 +90,45 @@ function amazon_woo_crawler_admin_page()
 
         }
         // importProduct
-        async function importProduct(index) {
+        async function importProduct(event, index) {
+            let thisBtn = event.target;
+            thisBtn.textContent = "Importing...";
+            thisBtn.disabled = true;
+
             const product = window.products[index];
             console.log("Importing product:", product);
 
-            let response = await fetch("/wp-json/amazon-crawler/v1/import", {
-                method: "POST",
-                headers: {
-                    "X-WP-Nonce": "<?php echo wp_create_nonce('wp_rest'); ?>",
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(product),
-            });
+            try {
+                let response = await fetch("/wp-json/amazon-crawler/v1/import", {
+                    method: "POST",
+                    headers: {
+                        "X-WP-Nonce": "<?php echo wp_create_nonce('wp_rest'); ?>",
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(product),
+                });
 
-            const data = await response.json();
-            if (response.ok) {
-                console.log("Import response:", response);
-                alert("Product imported successfully.");
-                // update window.products with the new product ID
-                window.products[index] = { ...window.products[index], status: "imported", product_id: data.product_id };
-                renderProducts();
-            } else {
-                console.error("Error importing product:", response);
-                alert(`Error importing product.\n${data.message}`);
-                window.products[index] = { ...window.products[index], status: "error", message: data.message };
-                renderProducts();
+                const data = await response.json();
+
+                if (response.ok) {
+                    console.log("Import response:", data);
+                    alert("Product imported successfully.");
+                    window.products[index] = { ...product, status: "imported", product_id: data.product_id };
+                } else {
+                    console.error("Error importing product:", data);
+                    alert(`Error importing product.\n${data.message}`);
+                    window.products[index] = { ...product, status: "error", message: data.message };
+                }
+            } catch (error) {
+                console.error("Fetch error:", error);
+                alert("An error occurred while importing the product.");
             }
 
+            renderProducts();
+            thisBtn.textContent = "Import";
+            thisBtn.disabled = false;
         }
+
 
         function renderProducts() {
             const tableBody = document.getElementById("scraped-products");
@@ -159,7 +170,7 @@ function amazon_woo_crawler_admin_page()
                 <td class='border px-4 py-2'>${data.sale_price}</td>
 
                 <td class='border px-4 py-2 w-48'>
-                <button class='bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600' onclick="importProduct(${index})">Import</button>
+                <button class='bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 import-btn' data-index="${index}">Import</button>
                 <button class='bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600' onclick="toggleDetails('${rowId}')">View</button>
                 </td>
                 </tr>
@@ -210,16 +221,16 @@ function amazon_woo_crawler_admin_page()
                     <div class="reviews-container">
                         ${data.reviews && data.reviews.length > 0 ?
                     data.reviews.map(review => `
-                                                                                                                                                                            <div class="review-item border-b pb-3 mb-3">
-                                                                                                                                                                                <div class="flex items-center mb-1">
-                                                                                                                                                                                    <span class="font-semibold mr-2">${review.name}</span>
-                                                                                                                                                                                    <span class="text-yellow-500">${review.rating} ★</span>
-                                                                                                                                                                                    <span class="text-gray-500 text-sm ml-2">${review.date}</span>
-                                                                                                                                                                                </div>
-                                                                                                                                                                                <p class="mb-1">${review.comment}</p>
-                                                                                                                                                                                <span class="text-gray-500 text-xs">${review.location}</span>
-                                                                                                                                                                            </div>
-                                                                                                                                                                            `).join("")
+                            <div class="review-item border-b pb-3 mb-3">
+                                <div class="flex items-center mb-1">
+                                    <span class="font-semibold mr-2">${review.name}</span>
+                                    <span class="text-yellow-500">${review.rating} ★</span>
+                                    <span class="text-gray-500 text-sm ml-2">${review.date}</span>
+                                </div>
+                                <p class="mb-1">${review.comment}</p>
+                                <span class="text-gray-500 text-xs">${review.location}</span>
+                            </div>
+                            `).join("")
                     : "No reviews available"}
                     </div>
                 </div>
@@ -228,6 +239,14 @@ function amazon_woo_crawler_admin_page()
                 </tr>`;
                 tableBody.innerHTML += row;
             }
+
+            document.querySelectorAll(".import-btn").forEach((button) => {
+                button.addEventListener("click", function (event) {
+                    let index = event.target.getAttribute("data-index");
+                    console.log("Importing product at index:", index);
+                    importProduct(event, index);
+                });
+            });
         }
 
         function extractASINs(input) {
@@ -314,6 +333,8 @@ function amazon_woo_crawler_admin_page()
                     document.getElementById("amazon_urls").value = "";
                 }
             });
+
+
         });
     </script>
     <?php
