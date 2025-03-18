@@ -71,12 +71,6 @@ function amazon_woo_crawler_scrape($url, $proxy_url = '', $proxy_username = '', 
 
     $html = wp_remote_retrieve_body($response);
 
-    // write to file for save test
-    // $file = fopen("amazon.html", "w");
-    // fwrite($file, $html);
-    // fclose($file);
-
-
     // Check for Amazon blocking
     if (stripos($html, 'To discuss automated access to Amazon data') !== false) {
         return new WP_Error(

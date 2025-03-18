@@ -16,7 +16,8 @@ function amazon_woo_crawler_admin_page()
         <div class="content p-4 border rounded bg-white" style="display: none;">
             <form id="amazon-crawler-settings" class="space-y-4">
                 <label for="proxy_list" class="block text-sm font-medium text-gray-700">Proxy List (one per line):</label>
-                <textarea id="proxy_list" name="proxy_list" rows="3" class="w-full border rounded p-2"></textarea>
+                <textarea placeholder="ip:port:user:pass, ip:port" id="proxy_list" name="proxy_list" rows="3"
+                    class="w-full border rounded p-2"></textarea>
                 <button type="submit" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
                     Save Settings
                 </button>
@@ -221,16 +222,15 @@ function amazon_woo_crawler_admin_page()
                     <div class="reviews-container">
                         ${data.reviews && data.reviews.length > 0 ?
                     data.reviews.map(review => `
-                            <div class="review-item border-b pb-3 mb-3">
-                                <div class="flex items-center mb-1">
-                                    <span class="font-semibold mr-2">${review.name}</span>
-                                    <span class="text-yellow-500">${review.rating} ★</span>
-                                    <span class="text-gray-500 text-sm ml-2">${review.date}</span>
-                                </div>
-                                <p class="mb-1">${review.comment}</p>
-                                <span class="text-gray-500 text-xs">${review.location}</span>
-                            </div>
-                            `).join("")
+                                <div class="review-item border-b pb-3 mb-3">
+                                    <div class="flex items-center mb-1">
+                                        <span class="font-semibold mr-2">${review.name}</span>
+                                        <span class="text-yellow-500">${review.rating} ★</span>
+                                        <span class="text-gray-500 text-sm ml-2">${review.date}</span>
+                                    </div>
+                                    <p class="mb-1">${review.comment}</p>
+                                    <span class="text-gray-500 text-xs">${review.location}</span>
+                                </div>`).join("")
                     : "No reviews available"}
                     </div>
                 </div>
@@ -289,9 +289,22 @@ function amazon_woo_crawler_admin_page()
                 button.textContent = "Loading...";
                 button.disabled = true;
 
+                // load proxies
+                let proxies = localStorage.getItem("amazon_woo_crawler_proxies");
+                if (proxies) {
+                    proxies = JSON.parse(proxies);
+                }
+
                 for (const url of urls) {
                     try {
-                        const apiUrl = `/wp-json/amazon-crawler/v1/scrape?url=${encodeURIComponent(`https://www.amazon.com/dp/${url}`)}`;
+                        let apiUrl = `/wp-json/amazon-crawler/v1/scrape?url=${encodeURIComponent(`https://www.amazon.com/dp/${url}`)}`;
+                        if (proxies && proxies.length > 0) {
+                            let proxy = proxies[Math.floor(Math.random() * proxies.length)];
+                            apiUrl += `&proxy_url=${encodeURIComponent(proxy.ip + ":" + proxy.port)}`;
+                            if (proxy.username) apiUrl += `&proxy_username=${encodeURIComponent(proxy.username)}`;
+                            if (proxy.password) apiUrl += `&proxy_password=${encodeURIComponent(proxy.password)}`;
+                        }
+
                         let response = await fetch(apiUrl);
                         let data = await response.json();
 
@@ -319,9 +332,38 @@ function amazon_woo_crawler_admin_page()
 
             });
 
+            // load saved proxies
+            let savedProxies = localStorage.getItem("amazon_woo_crawler_proxies");
+            if (savedProxies) {
+                document.getElementById("proxy_list").value = JSON.parse(savedProxies).map(p => {
+                    let m = `${p.ip}:${p.port}`;
+                    if (p.username) m += `:${p.username}`;
+                    if (p.password) m += `:${p.password}`;
+                    return m;
+                }).join("\n");
+            }
+
             document.getElementById("amazon-crawler-settings").addEventListener("submit", function (e) {
                 e.preventDefault();
-                alert("Settings saved (but no backend handler yet).");
+                let proxyList = document.getElementById("proxy_list").value;
+                let proxies = proxyList.split("\n")
+                    .map(line => {
+                        // ip:port:username:password
+                        let parts = line.trim().split(":");
+
+                        if (parts.length < 2) return false;
+
+                        return {
+                            ip: parts[0],
+                            port: parts[1],
+                            username: parts[2] || null,
+                            password: parts[3] || null,
+                        }
+                    }).filter(m => m);
+
+                // save to local storage
+                localStorage.setItem("amazon_woo_crawler_proxies", JSON.stringify(proxies));
+                alert("Settings saved successfully.");
             });
 
             document.getElementById("clear-data").addEventListener("click", function (e) {
