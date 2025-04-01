@@ -55,3 +55,22 @@ function amazon_woo_crawler_admin_menu()
 }
 add_action('admin_menu', 'amazon_woo_crawler_admin_menu');
 
+function amazon_woo_crawler_enqueue_scripts()
+{
+    $script_path = AMAZON_WOO_CRAWLER_DIR . 'assets/main.js';
+    $script_version = file_exists($script_path) ? filemtime($script_path) : time();
+
+    wp_enqueue_script(
+        'amazon-woo-crawler-js',
+        AMAZON_WOO_CRAWLER_URL . 'assets/main.js',
+        array('jquery'),
+        $script_version, // Version based on file modification time
+        true
+    );
+
+    wp_localize_script('amazon-woo-crawler-js', 'amazonWooData', array(
+        'ajaxUrl' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('wp_rest')
+    ));
+}
+add_action('admin_enqueue_scripts', 'amazon_woo_crawler_enqueue_scripts');

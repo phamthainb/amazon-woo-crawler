@@ -17,6 +17,37 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+function getProxy($accessToken)
+{
+    $currentProxyUrl = "http://proxy.shoplike.vn/Api/getCurrentProxy?access_token=" . urlencode($accessToken);
+    $newProxyUrl = "http://proxy.shoplike.vn/Api/getNewProxy?access_token=" . urlencode($accessToken);
+
+    $currentProxy = fetchUrl($currentProxyUrl);
+    $currentProxyJson = json_decode($currentProxy, true);
+
+    if ($currentProxyJson['status'] === "error") {
+        $newProxyRes = fetchUrl($newProxyUrl);
+        //    $newProxyResJson = json_decode($newProxyRes, true);
+        return $newProxyRes;
+    }
+
+    return $currentProxy;
+}
+
+function fetchUrl($url)
+{
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    return ($httpCode === 200) ? $response : false;
+}
+
 function amazon_woo_crawler_scrape($url, $proxy_url = '', $proxy_username = '', $proxy_password = '')
 {
     require_once(ABSPATH . WPINC . '/class-wp-http.php');
@@ -46,16 +77,39 @@ function amazon_woo_crawler_scrape($url, $proxy_url = '', $proxy_username = '', 
     ];
 
     // Proxy configuration
-    if (!empty($proxy_url)) {
-        $args['proxy'] = $proxy_url;
+    // if (!empty($proxy_url)) {
+    //     $args['proxy'] = $proxy_url;
 
-        if (!empty($proxy_username) && !empty($proxy_password)) {
-            $args['headers']['Proxy-Authorization'] = 'Basic ' . base64_encode("$proxy_username:$proxy_password");
-        }
+    //     if (!empty($proxy_username) && !empty($proxy_password)) {
+    //         $args['headers']['Proxy-Authorization'] = 'Basic ' . base64_encode("$proxy_username:$proxy_password");
+    //     }
+    // }
+
+    // migrate with rotate proxy
+    // curl --location -g 'http://proxy.shoplike.vn/Api/getCurrentProxy?access_token=xxx'
+    // if not getCurrentProxy then curl --location -g 'http://proxy.shoplike.vn/Api/getNewProxy?access_token=xxx'
+
+    $proxyJson = getProxy('xx');
+
+    if ($proxyJson === false) {
+        die("Failed to get proxy data.");
+    }
+
+    $proxyData = json_decode($proxyJson, true);
+
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        die("Invalid JSON response.");
+    }
+
+    if (isset($proxyData['data']['proxy'])) {
+        $args['proxy'] = $proxyData['data']['proxy'];
     }
 
     // Fetch product page
     $response = wp_remote_get($url, $args);
+    // $response = wp_remote_get("ifconfig.me", $args);
+    // echo wp_remote_retrieve_body($response);
+    // die();
 
     if (is_wp_error($response)) {
         return new WP_Error(
@@ -220,8 +274,7 @@ function amazon_woo_crawler_scrape($url, $proxy_url = '', $proxy_username = '', 
 
         // Debug information
         'debug' => [
-            'proxy_url' => $proxy_url,
-            'proxy_username' => $proxy_username
+            'proxy_url' => $proxyData,
         ]
     ];
 
